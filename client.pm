@@ -1,10 +1,10 @@
 package AIS::client;
 
 use 5.006;
-$VERSION = 0.06;
+$VERSION = 0.07;
 use Carp;
 
-use DirDB 0.06; # or any other concurrent-access-safe
+use DirDB 0.09; # or any other concurrent-access-safe
                 # persistence abstraction
 	        # that can store and retreive hash references
 	        # and has a working DELETE method
@@ -62,6 +62,24 @@ sub housekeeping(){
 	@Sessions{@deletia} = ();
 };
 
+sub redirect($){
+	print <<EOF;
+Location: $_[0]
+Content-Type: text/html
+
+<HTML><HEAD><TITLE>Relocate </TITLE>
+<META HTTP-EQUIV="REFRESH" CONTENT="1;URL=$_[0]">
+</HEAD>
+<BODY>
+<A HREF="$_[0]">
+<H1>Trying to relocate to $_[0]</H1>please click
+here</A>.
+</BODY></HTML>
+
+EOF
+
+};
+
 sub import{
 	shift;
 	my %params = @_;
@@ -76,8 +94,26 @@ my $Coo;
 	"http$ssl_ext://$ENV{SERVER_NAME}$ENV{SCRIPT_NAME}";
  $SessionPrefix = $params{prefix} || 'AIS'; # 'AIS_session';
 
+eval{
 tie  %Sessions => DirDB => "${SessionPrefix}_sessions";
+};
+if($@){
+	print <<EOF;
+Content-Type: text/plain
 
+AIS::client module was not able to open DirDB [${SessionPrefix}_sessions]
+
+eval result:
+
+$@
+
+AIS::client version $VERSION
+
+EOF
+
+	exit;
+
+};
 	if($freq){
 		 housekeeping unless ($$ % $freq)
 	};
@@ -162,7 +198,8 @@ EOF
 				};
 
 				if ($aisvar{identity} eq 'NULL'){
-					print "Location: $aisvar{aissri}add?RU=http$ssl_ext://$ENV{SERVER_NAME}$ENV{SCRIPT_NAME}$ENV{PATH_INFO}\n\n";
+redirect(
+"$aisvar{aissri}add?RU=http$ssl_ext://$ENV{SERVER_NAME}$ENV{SCRIPT_NAME}$ENV{PATH_INFO}");
 					exit;
 				};
 
@@ -198,7 +235,7 @@ EOF
 			}else{
 				# redirect us to AIS server PRESENT function
 
-				print "Location: ${aissri}present?http$ssl_ext://$ENV{SERVER_NAME}$ENV{SCRIPT_NAME}$ENV{PATH_INFO}?OTU_KEY=\n\n";
+				redirect "${aissri}present?http$ssl_ext://$ENV{SERVER_NAME}$ENV{SCRIPT_NAME}$ENV{PATH_INFO}?OTU_KEY=";
 				exit;
 
 
@@ -218,12 +255,14 @@ EOF
 		my @chars = 'A'..'Z' ;
 		substr($Coo, rand(length $Coo), 1) = $chars[rand @chars]
 		foreach 1..8;
+		print "X-Ais-Received-Request-Method: $ENV{REQUEST_METHOD}\n";
+		print "X-Ais-Received-Query-String: $ENV{QUERY_STRING}\n";
 		$Sessions{$Coo}->{QueryString} = $ENV{QUERY_STRING};
 		$ENV{REQUEST_METHOD} =~ /POST/i and
 		$Sessions{$Coo}->{PostData} = <>;
 
 		print "Set-Cookie:/${SessionPrefix}_session=$Coo\n";
-		print "Location: http$ssl_ext://$ENV{SERVER_NAME}$ENV{SCRIPT_NAME}$ENV{PATH_INFO}?AIS_INITIAL$suffix\n\n";
+		redirect "http$ssl_ext://$ENV{SERVER_NAME}$ENV{SCRIPT_NAME}$ENV{PATH_INFO}?AIS_INITIAL$suffix";
 		exit;
 	};
 
@@ -304,6 +343,7 @@ AIS::client - get an authenticated e-mail address for users of your web service
 
 =head1 SYNOPSIS
 
+  BEGIN{umask(0077 & umask())}; # if your web server gives you a 0177 umask
   use AIS::client;
   print "Content-type: text/plain\n\nWelcome $AIS_IDENTITY\n";
   print "this is page view number ", ++$AIS_STASH{accesses};
@@ -384,6 +424,13 @@ of that too if they want.
 
 	fixed the Makefile.pl to call in DirDB
 
+=item 0.07
+
+	installation problems due to permissions now go to the
+	web browser instead of silently dying. 
+
+	redirections now done with more portable REFRESH meta tags
+	instead of (along with) less portable Location: headers
 
 =back
 
