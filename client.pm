@@ -1,7 +1,7 @@
 package AIS::client;
 
 use 5.006;
-$VERSION = 0.05;
+$VERSION = 0.06;
 use Carp;
 
 use DirDB 0.06; # or any other concurrent-access-safe
@@ -379,6 +379,10 @@ of that too if they want.
 	This is the first public AIS client module release with this
 	interface, which is entirely different from the CGI::AIS::Session
 	interface.
+
+=item 0.06
+
+	fixed the Makefile.pl to call in DirDB
 
 
 =back
